@@ -1,5 +1,6 @@
 
 {
+    "stack": "heroku-20",
     "name": "SamFetch API",
     "description": "A Web API to download firmwares from Samsung servers without any restriction.",
     "website": "https://ysfchn.com",
@@ -9,7 +10,7 @@
         "SAMFETCH_HIDE_TEXT": {
             "description": "Only 0 or 1. Set the value to 1 if you don't want the help text.",
             "value": "0",
-          "stack": "heroku-20",
+          
             "required": false
         },
         "SAMFETCH_ALLOW_ORIGIN": {
