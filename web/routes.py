@@ -30,17 +30,21 @@ async def get_firmware_list(request : Request, region : str, model : str):
         raise make_error(SamfetchError.DEVICE_NOT_FOUND, response.status_code)
     # Parse XML
     firmwares = KiesFirmwareList.from_xml(response.text)
+
     # Check if model is correct by checking the "versioninfo" key.
     if firmwares.exists:
         # Return the firmware data.
         ff = []
+
         for i, f in enumerate([firmwares.latest] + firmwares.alternate):
             info = KiesUtils.read_firmware_dict(f)
             fff = {"firmware": f}
+
             if i == 0:
                 fff["is_latest"] = True
             fff["pda"] = info
             ff.append(fff)
+
         return json(ff)
     # Raise exception when device couldn't be found.
     if firmwares._versions == None:
@@ -91,7 +95,8 @@ async def get_binary_details(request : Request, region: str, model: str, firmwar
     session = Session.from_response(nonce)
     # Make the request.
     binary_info = await client.send(
-        KiesRequest.get_binary(region = region, model = model, firmware = firmware, session = session)
+        KiesRequest.get_binary(region = region, model = model, firmware = firmware, session =
+        session)
     )
     await client.aclose()
     # Read the request.
@@ -142,8 +147,8 @@ async def get_binary_details(request : Request, region: str, model: str, firmwar
     raise make_error(SamfetchError.KIES_SERVER_OUTER_ERROR, binary_info.status_code)
 
 
-@bp.get("/file/<path:path>/<filename:str>")
-async def download_binary(request : Request, path: str, filename: str):
+@bp.get("/file/<region:str>/<model:str>/<firmware:str>/download")
+async def download_binary(request: Request, region: str, model: str, firmware: str):
     """
     Downloads the firmware with given path and filename.
     To enable decrypting, insert "decrypt" query parameter with decryption key. If this parameter is not provided,

@@ -53,8 +53,8 @@ class Crypto:
     """
 
     # Crypto keys
-    KEY_1 = "hqzdurufm2c8mf6bsjezu1qgveouv7c7"
-    KEY_2 = "w13r4cvf4hctaujv"
+    KEY_1 = "vicopx7dqu06emacgpnpy8j8zwhduwlh"
+    KEY_2 = "9u7qab84rpc16gvk"
 
     @staticmethod
     def unpad(inp):
