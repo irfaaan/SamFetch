@@ -52,8 +52,8 @@ async def get_firmware_list(request : Request, region : str, model : str):
     raise make_error(SamfetchError.FIRMWARE_CANT_PARSE, 404)
 
 
-@bp.get("/<region:str>/<model:str>/<mode:(latest|latest/download)>")
-async def get_firmware_latest(request : Request, region : str, model : str, mode : str):
+@bp.get("/<region:str>/<model:str>/<imei:str>/<mode:(latest|latest/download)>")
+async def get_firmware_latest(request : Request, region : str, model : str, imei : str, mode : str):
     """
     Gets the latest firmware version for the device and redirects to its information.
     """
@@ -70,7 +70,7 @@ async def get_firmware_latest(request : Request, region : str, model : str, mode
     firmwares = KiesFirmwareList.from_xml(response.text)
     # Check if model is correct by checking the "versioninfo" key.
     if firmwares.exists:
-        return redirect(f"/{region}/{model}/{firmwares.latest}" + ("/download" if "/download" in mode else ""))
+        return redirect(f"/{region}/{model}/{imei}/{firmwares.latest}" + ("/download" if "/download" in mode else ""))
     # Raise exception when device couldn't be found.
     if firmwares._versions == None:
         raise make_error(SamfetchError.FIRMWARE_LIST_EMPTY, 404)
@@ -78,8 +78,8 @@ async def get_firmware_latest(request : Request, region : str, model : str, mode
 
 
 # Gets the binary details such as filename and decrypt key.
-@bp.get("/<region:str>/<model:str>/<firmware_path:([A-Z0-9]*/[A-Z0-9]*/[A-Z0-9]*/[A-Z0-9]*[/download]*)>")
-async def get_binary_details(request : Request, region: str, model: str, firmware_path: str):
+@bp.get("/<region:str>/<model:str>/<imei:str>/<firmware_path:([A-Z0-9]*/[A-Z0-9]*/[A-Z0-9]*/[A-Z0-9]*[/download]*)>")
+async def get_binary_details(request : Request, region: str, model: str, imei: str, firmware_path: str):
     """
     Gets the firmware details such as path, filename and decrypt key. 
     Use these values to start downloading the firmware file.
@@ -95,7 +95,7 @@ async def get_binary_details(request : Request, region: str, model: str, firmwar
     session = Session.from_response(nonce)
     # Make the request.
     binary_info = await client.send(
-        KiesRequest.get_binary(region = region, model = model, firmware = firmware, session =
+        KiesRequest.get_binary(region = region, model = model, imei = imei, firmware = firmware, session =
         session)
     )
     await client.aclose()
@@ -147,8 +147,8 @@ async def get_binary_details(request : Request, region: str, model: str, firmwar
     raise make_error(SamfetchError.KIES_SERVER_OUTER_ERROR, binary_info.status_code)
 
 
-@bp.get("/file/<region:str>/<model:str>/<firmware:str>/download")
-async def download_binary(request: Request, region: str, model: str, firmware: str):
+@bp.get("/file/<region:str>/<model:str>/<imei:str>/<firmware:str>/download")
+async def download_binary(request: Request, region: str, model: str, imei: str, firmware: str):
     """
     Downloads the firmware with given path and filename.
     To enable decrypting, insert "decrypt" query parameter with decryption key. If this parameter is not provided,
@@ -198,14 +198,16 @@ async def download_binary(request: Request, region: str, model: str, firmware: s
                 await client.aclose()
                 raise make_error(SamfetchError.KIES_SERVER_ERROR, download_file.status_code)
             # Create headers.
-            headers = { 
-                "Content-Disposition": 'attachment; filename="' + \
-                    (CUSTOM_FILENAME or (filename if not DECRYPT_ENABLED else filename.replace(".enc4", "").replace(".enc2", ""))) + '"',
+            # Create headers.
+            headers = {
+                "Content-Disposition": 'attachment; filename="' + (CUSTOM_FILENAME or (filename if not DECRYPT_ENABLED else filename.replace(".enc4", "").replace(".enc2", ""))) + '"',
                 # Get the total size of binary.
-                "Content-Length": download_file.headers["Content-Length"],
+                "Content-Length": download_file.headers.get("Content-Length", ""),
                 "Accept-Ranges": "bytes",
                 "Connection": "keep-alive"
             }
+
+
             if "Content-Range" in download_file.headers:
                 headers["Content-Range"] = download_file.headers["Content-Range"]
             # If decryption is enabled, remove Content-Length.

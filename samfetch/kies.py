@@ -121,9 +121,9 @@ class KiesConstants:
         }
 
     client_version = "4.3.23123_1"
-    imei = "00000000000000"
+#     imei = "354680110369726"
 
-    BINARY_INFO = lambda firmware_version, region, model, logic_check: \
+    BINARY_INFO = lambda firmware_version, region, model, imei, logic_check: \
         dicttoxml.dicttoxml({
             "FUSMsg": {
                 "FUSHdr": {"ProtoVer": "1.0"},
@@ -135,7 +135,7 @@ class KiesConstants:
                         "DEVICE_FW_VERSION": {"Data": firmware_version},
                         "DEVICE_LOCAL_CODE": {"Data": region},
                         "DEVICE_MODEL_NAME": {"Data": model},
-                        "DEVICE_IMEI_PUSH": {"Data": KiesConstants.imei},
+                        "DEVICE_IMEI_PUSH": {"Data": imei},
                         "CLIENT_VERSION": {"Data": KiesConstants.client_version},
                         "LOGIC_CHECK": {"Data": logic_check}
                     }
@@ -178,9 +178,9 @@ class KiesRequest:
         )
 
     @staticmethod
-    def get_binary(region: str, model: str, firmware: str, session: Session) -> httpx.Request:
+    def get_binary(region: str, model: str, firmware: str, imei: str, session: Session) -> httpx.Request:
         binary_info = KiesConstants.BINARY_INFO(
-            firmware, region, model, session.logic_check(firmware)
+            firmware, region, model, imei, session.logic_check(firmware)
         )
         return httpx.Request(
             "POST",
@@ -272,5 +272,5 @@ class KiesUtils:
         return {
             "bl": ff[0],
             "date": f"{ff[2]}.{ff[3]}",
-            "it": f"{ff[1]}.{ff[4]}"
+            "it": f"{ff[1]}.{ff[4]}",
         }
