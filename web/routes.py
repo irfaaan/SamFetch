@@ -104,7 +104,7 @@ async def get_binary_details(request: Request, region: str, model: str, firmware
     status_code = None
 
     # Use IMEIGenerator to generate a random IMEI
-    for attempt in range(1, 8):
+    for attempt in range(1, 6):
         imei = IMEIGenerator.generate_random_imei(imei_data)
         # imei = "354399110859137"
 
