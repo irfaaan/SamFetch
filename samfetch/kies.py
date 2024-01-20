@@ -7,6 +7,7 @@ __all__ = [
     "KiesFirmwareList"
 ]
 
+
 from collections import UserDict
 from typing import List, Tuple, Dict, Any, Optional
 import dicttoxml
@@ -15,6 +16,17 @@ import re
 import httpx
 import string
 from samfetch.session import Session
+from .imei import generate_random_imei
+
+
+
+class IMEIGenerator:
+        @staticmethod
+        def generate_random_imei(tac: str) -> str:
+            """Generate a random IMEI based on the provided TAC."""
+            random_imei = generate_random_imei(tac)
+            return random_imei
+
 
 class KiesFirmwareList:
     """
@@ -121,7 +133,7 @@ class KiesConstants:
         }
 
     client_version = "4.3.23123_1"
-#     imei = "354680110369726"
+    #imei = "35439911"
 
     BINARY_INFO = lambda firmware_version, region, model, imei, logic_check: \
         dicttoxml.dicttoxml({
@@ -151,12 +163,13 @@ class KiesConstants:
                     "Put": {
                         "BINARY_FILE_NAME": {"Data": filename},
                         "LOGIC_CHECK": {"Data": logic_check},
-                        "DEVICE_IMEI_PUSH": {"Data": KiesConstants.imei},
+                        "DEVICE_IMEI_PUSH": {"Data": imei},
                         "CLIENT_VERSION": {"Data": KiesConstants.client_version}
                     }
                 }
             }
         }, attr_type=False, root=False)
+
 
 class KiesRequest:
     """
@@ -177,6 +190,8 @@ class KiesRequest:
             KiesConstants.GET_FIRMWARE_URL.format(region, model)
         )
 
+
+
     @staticmethod
     def get_binary(region: str, model: str, firmware: str, imei: str, session: Session) -> httpx.Request:
         binary_info = KiesConstants.BINARY_INFO(
@@ -191,7 +206,7 @@ class KiesRequest:
         )
 
     @staticmethod
-    def get_download(path: str, session: Session, imei: str, client_version: str) -> httpx.Request:
+    def get_download(path: str, session: Session, result: str, client_version: str) -> httpx.Request:
         filename = path.split("/")[-1]
         return httpx.Request(
             "POST",
@@ -203,7 +218,7 @@ class KiesRequest:
                 session.encrypted_nonce, session.auth
             ),
             cookies=KiesConstants.COOKIES(session.session_id),
-            params={"imei": imei, "client_version": client_version}
+            params={"result": result, "client_version": client_version}
         )
 
     @staticmethod

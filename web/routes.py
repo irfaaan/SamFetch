@@ -5,12 +5,13 @@ from sanic import Blueprint
 from sanic.request import Request
 from sanic.response import json, redirect
 from sanic.exceptions import NotFound
-from samfetch.kies import KiesData, KiesFirmwareList, KiesRequest, KiesUtils
+from samfetch.kies import KiesData, KiesFirmwareList, KiesRequest, KiesUtils, IMEIGenerator
 from samfetch.session import Session
 from samfetch.crypto import start_decryptor
 from web.exceptions import make_error, SamfetchError
 import httpx
 import re
+import xml.etree.ElementTree as ET
 
 bp = Blueprint(name = "Routes")
 
@@ -52,8 +53,8 @@ async def get_firmware_list(request : Request, region : str, model : str):
     raise make_error(SamfetchError.FIRMWARE_CANT_PARSE, 404)
 
 
-@bp.get("/<region:str>/<model:str>/<imei:str>/<mode:(latest|latest/download)>")
-async def get_firmware_latest(request : Request, region : str, model : str, imei : str, mode : str):
+@bp.get("/<region:str>/<model:str>/<mode:(latest|latest/download)>")
+async def get_firmware_latest(request : Request, region : str, model : str,  mode : str):
     """
     Gets the latest firmware version for the device and redirects to its information.
     """
@@ -70,7 +71,7 @@ async def get_firmware_latest(request : Request, region : str, model : str, imei
     firmwares = KiesFirmwareList.from_xml(response.text)
     # Check if model is correct by checking the "versioninfo" key.
     if firmwares.exists:
-        return redirect(f"/{region}/{model}/{imei}/{firmwares.latest}" + ("/download" if "/download" in mode else ""))
+        return redirect(f"/{region}/{model}/{firmwares.latest}" + ("/download" if "/download" in mode else ""))
     # Raise exception when device couldn't be found.
     if firmwares._versions == None:
         raise make_error(SamfetchError.FIRMWARE_LIST_EMPTY, 404)
@@ -78,77 +79,114 @@ async def get_firmware_latest(request : Request, region : str, model : str, imei
 
 
 # Gets the binary details such as filename and decrypt key.
-@bp.get("/<region:str>/<model:str>/<imei:str>/<firmware_path:([A-Z0-9]*/[A-Z0-9]*/[A-Z0-9]*/[A-Z0-9]*[/download]*)>")
-async def get_binary_details(request : Request, region: str, model: str, imei: str, firmware_path: str):
-    """
-    Gets the firmware details such as path, filename and decrypt key. 
-    Use these values to start downloading the firmware file.
-    """
-    # Check if "/download" path has appended to firmware value.
+@bp.get("/<region:str>/<model:str>/<firmware_path:([A-Z0-9]*/[A-Z0-9]*/[A-Z0-9]*/[A-Z0-9]*[/download]*)>")
+async def get_binary_details(request: Request, region: str, model: str, firmware_path: str):
+    # Check if "/download" path has been appended to the firmware value.
     is_download = firmware_path.removesuffix("/").endswith("/download")
     firmware = firmware_path.removesuffix("/").removesuffix("/download")
+
     if not re.match(r"^[A-Z0-9]*/[A-Z0-9]*/[A-Z0-9]*/[A-Z0-9]*$", firmware):
         raise NotFound(f"Requested URL {request.path} not found")
-    # Create new session.
-    client = httpx.AsyncClient()
-    nonce = await client.send(KiesRequest.get_nonce())
-    session = Session.from_response(nonce)
-    # Make the request.
-    binary_info = await client.send(
-        KiesRequest.get_binary(region = region, model = model, imei = imei, firmware = firmware, session =
-        session)
-    )
-    await client.aclose()
-    # Read the request.
-    if binary_info.status_code == 200:
+
+    # Placeholder for defining imei before the loop.
+    imei = None
+
+    # Use IMEIGenerator to generate a random IMEI
+    for attempt in range(1, 6):
+        imei = IMEIGenerator.generate_random_imei("35439911")
+        # imei = "354399110859137"
+        print(imei)
+
+        # Create new session.
+        client = httpx.AsyncClient()
+        nonce = await client.send(KiesRequest.get_nonce())
+        session = Session.from_response(nonce)
+
+        try:
+            # Make the request with the generated IMEI
+            binary_info = await client.send(
+                KiesRequest.get_binary(region=region, model=model, firmware=firmware, imei=imei, session=session)
+            )
+
+            # Read the request.
+            root = ET.fromstring(binary_info.text)
+            status_code = root.find(".//Status").text
+            print("code status:", status_code)
+
+            if status_code == "200":
+                break  # Break out of the loop when status_code is 200
+
+            elif status_code == "408":
+                print(f"Attempt {attempt}: IMEI {imei} is invalid. FUS Returned : {status_code}")
+                # Handle 408 errors by waiting longer before retrying
+
+            elif status_code == "401":
+                # Handle 401 errors (Unauthorized) appropriately
+                raise make_error(SamfetchError.UNAUTHORIZED, int(status_code))
+
+            else:
+                # Handle other non-200 status codes
+                raise make_error(SamfetchError.UNKNOWN_ERROR, int(status_code))
+
+        finally:
+            await client.aclose()
+
+
+    if status_code == "200":
         kies = KiesData.from_xml(binary_info.text)
-        # Return error when binary couldn't be found.
-        if kies.status_code != 200:
-            raise make_error(SamfetchError.FIRMWARE_NOT_FOUND, 404)
-        # Return error if binary is not downloadable.
-        # https://github.com/nlscc/samloader/issues/54
-        if kies.body.get("BINARY_NAME") == None:
-            raise make_error(SamfetchError.FIRMWARE_LOST, 404)
-        # If file extension ends with .enc4 that means it is using version 4 encryption, otherwise 2 (.enc2).
+        print(f"Attempt {attempt}: Valid IMEI Found: {imei}")
+
         ENCRYPT_VERSION = 4 if str(kies.body["BINARY_NAME"]).endswith("4") else 2
+
         # Generate decrypted key for decrypting the file after downloading.
-        # Decrypt key gives a list of bytes, but as it is not possible to send as query parameter, 
+        # Decrypt key gives a list of bytes, but as it is not possible to send as a query parameter,
         # we are converting it to a single HEX value.
-        decryption_key = \
-            session.getv2key(firmware, model, region).hex() if ENCRYPT_VERSION == 2 else \
-            session.getv4key(kies.body.get_first("LATEST_FW_VERSION", "ADD_LATEST_FW_VERSION"), kies.body["LOGIC_VALUE_FACTORY"]).hex()
-        # If auto downloading has enabled, redirect to downloading the firmware.
+        decryption_key = (
+            session.getv2key(firmware, model, region).hex()
+            if ENCRYPT_VERSION == 2
+            else session.getv4key(
+                kies.body.get_first("LATEST_FW_VERSION", "ADD_LATEST_FW_VERSION"),
+                kies.body["LOGIC_VALUE_FACTORY"],
+            ).hex()
+        )
+
+        # If auto-downloading has enabled, redirect to downloading the firmware.
         download_path = f'/file{kies.body["MODEL_PATH"]}{kies.body["BINARY_NAME"]}'
         if is_download:
             return redirect(download_path + "?decrypt=" + decryption_key)
+
         server_path = f"{request.scheme}://{request.server_name}{'' if request.server_port in [80, 443] else ':' + str(request.server_port)}"
+
         # Get binary details.
         return json({
             "display_name": kies.body["DEVICE_MODEL_DISPLAYNAME"],
             "size": int(kies.body["BINARY_BYTE_SIZE"]),
-            # Convert bytes to GB, so it will be more readable for an end-user.
-            "size_readable": "{:.2f} GB".format(float(kies.body["BINARY_BYTE_SIZE"]) / 1024 / 1024 / 1024),
+            "size_readable": "{:.2f} GB".format(
+                float(kies.body["BINARY_BYTE_SIZE"]) / 1024 / 1024 / 1024
+            ),
             "filename": kies.body["BINARY_NAME"],
             "path": kies.body["MODEL_PATH"],
             "version": kies.body["CURRENT_OS_VERSION"].replace("(", " ("),
             "encrypt_version": ENCRYPT_VERSION,
             "last_modified": int(kies.body["LAST_MODIFIED"]),
             "decrypt_key": decryption_key,
-            # A URL of samsungmobile that includes release changelogs.
-            # Not available for every device.
-            "firmware_changelog_url": kies.body.get_first("DESCRIPTION", "ADD_DESCRIPTION"),
+            "firmware_changelog_url": kies.body.get_first(
+                "DESCRIPTION", "ADD_DESCRIPTION"
+            ),
             "platform": kies.body["DEVICE_PLATFORM"],
             "crc": kies.body["BINARY_CRC"],
             "download_path": server_path + download_path,
-            "download_path_decrypt": server_path + download_path + "?decrypt=" + decryption_key,
-            "pda": KiesUtils.read_firmware_dict(firmware)
+            "download_path_decrypt": (
+                server_path + download_path + "?decrypt=" + decryption_key
+            ),
+            "pda": KiesUtils.read_firmware_dict(firmware),
         })
-    # Raise exception when status is not 200.
-    raise make_error(SamfetchError.KIES_SERVER_OUTER_ERROR, binary_info.status_code)
 
+    else:
+        raise make_error(SamfetchError.MAX_RETRY_EXCEEDED, 500)
 
-@bp.get("/file/<region:str>/<model:str>/<imei:str>/<firmware:str>/download")
-async def download_binary(request: Request, region: str, model: str, imei: str, firmware: str):
+@bp.get("/file/<region:str>/<model:str>/<firmware:str>/download")
+async def download_binary(request: Request, region: str, model: str,  firmware: str):
     """
     Downloads the firmware with given path and filename.
     To enable decrypting, insert "decrypt" query parameter with decryption key. If this parameter is not provided,
