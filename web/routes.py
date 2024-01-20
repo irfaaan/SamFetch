@@ -99,7 +99,7 @@ async def get_binary_details(request: Request, region: str, model: str, firmware
         raise NotFound(f"Requested URL {request.path} not found")
 
     # Placeholder for defining imei before the loop.
-    imei_data = read_imei_data("/home/mudassar/Music/SamFetch/web/tacs.csv", model)
+    imei_data = read_imei_data("web/tacs.csv", model)
     print(imei_data)
     imei = None
     status_code = None
