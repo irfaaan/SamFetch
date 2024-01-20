@@ -12,6 +12,7 @@ from web.exceptions import make_error, SamfetchError
 import httpx
 import re
 import xml.etree.ElementTree as ET
+import csv
 
 bp = Blueprint(name = "Routes")
 
@@ -78,6 +79,15 @@ async def get_firmware_latest(request : Request, region : str, model : str,  mod
     raise make_error(SamfetchError.FIRMWARE_CANT_PARSE, 404)
 
 
+# read csv file
+def read_imei_data(csv_path, target_model):
+    with open(csv_path, newline='') as csvfile:
+        reader = csv.reader(csvfile)
+        for row in reader:
+            if target_model in row:
+                return row[0]  # Return the first element (IMEI) from the matching row
+    return None
+
 # Gets the binary details such as filename and decrypt key.
 @bp.get("/<region:str>/<model:str>/<firmware_path:([A-Z0-9]*/[A-Z0-9]*/[A-Z0-9]*/[A-Z0-9]*[/download]*)>")
 async def get_binary_details(request: Request, region: str, model: str, firmware_path: str):
@@ -89,13 +99,16 @@ async def get_binary_details(request: Request, region: str, model: str, firmware
         raise NotFound(f"Requested URL {request.path} not found")
 
     # Placeholder for defining imei before the loop.
+    imei_data = read_imei_data("/home/mudassar/Music/SamFetch/web/tacs.csv", model)
+    print(imei_data)
     imei = None
+    status_code = None
 
     # Use IMEIGenerator to generate a random IMEI
     for attempt in range(1, 6):
-        imei = IMEIGenerator.generate_random_imei("35439911")
-        # imei = "354399110859137"
+        imei = IMEIGenerator.generate_random_imei(imei_data)
         print(imei)
+        # imei = "354399110859137"
 
         # Create new session.
         client = httpx.AsyncClient()
