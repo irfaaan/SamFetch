@@ -100,14 +100,12 @@ async def get_binary_details(request: Request, region: str, model: str, firmware
 
     # Placeholder for defining imei before the loop.
     imei_data = read_imei_data("web/tacs.csv", model)
-    print(imei_data)
     imei = None
     status_code = None
 
     # Use IMEIGenerator to generate a random IMEI
-    for attempt in range(1, 6):
+    for attempt in range(1, 8):
         imei = IMEIGenerator.generate_random_imei(imei_data)
-        print(imei)
         # imei = "354399110859137"
 
         # Create new session.
