@@ -88,10 +88,13 @@ def read_imei_data(csv_path, target_model):
                 return row[0]  # Return the first element (IMEI) from the matching row
     return None
 
+filepath = None
+p_filename = None
 # Gets the binary details such as filename and decrypt key.
 @bp.get("/<region:str>/<model:str>/<firmware_path:([A-Z0-9]*/[A-Z0-9]*/[A-Z0-9]*/[A-Z0-9]*[/download]*)>")
 async def get_binary_details(request: Request, region: str, model: str, firmware_path: str):
     # Check if "/download" path has been appended to the firmware value.
+    global filepath, p_filename
     is_download = firmware_path.removesuffix("/").endswith("/download")
     firmware = firmware_path.removesuffix("/").removesuffix("/download")
 
@@ -145,6 +148,9 @@ async def get_binary_details(request: Request, region: str, model: str, firmware
 
     if status_code == "200":
         kies = KiesData.from_xml(binary_info.text)
+        filepath = kies.body["MODEL_PATH"]
+        p_filename = kies.body["BINARY_NAME"]
+
         print(f"Attempt {attempt}: Valid IMEI Found: {imei}")
 
         ENCRYPT_VERSION = 4 if str(kies.body["BINARY_NAME"]).endswith("4") else 2
@@ -191,18 +197,21 @@ async def get_binary_details(request: Request, region: str, model: str, firmware
                 server_path + download_path + "?decrypt=" + decryption_key
             ),
             "pda": KiesUtils.read_firmware_dict(firmware),
+            "imei": imei,
+            "firmware": firmware
         })
 
     else:
         raise make_error(SamfetchError.MAX_RETRY_EXCEEDED, 500)
 
-@bp.get("/file/<region:str>/<model:str>/<firmware:str>/download")
+@bp.get("/file/<region:str>/<model:str>/<firmware:str>/")
 async def download_binary(request: Request, region: str, model: str,  firmware: str):
     """
     Downloads the firmware with given path and filename.
     To enable decrypting, insert "decrypt" query parameter with decryption key. If this parameter is not provided,
     the encrypted binary will be downloaded. Path, filename and decryption key can be obtained on `/firmware` endpoint.
     """
+    global filepath, p_filename
     args = request.get_args()
     decrypt_key = args.get("decrypt", None)
     DECRYPT_ENABLED : bool = decrypt_key != None
@@ -212,6 +221,10 @@ async def download_binary(request: Request, region: str, model: str,  firmware: 
     nonce = await client.send(KiesRequest.get_nonce())
     session = Session.from_response(nonce)
     # Make the request.
+    path = filepath
+    filename = p_filename
+
+
     download_info = await client.send(
         KiesRequest.get_download(path = KiesUtils.join_path(path, filename), session = session)
     )
@@ -235,7 +248,7 @@ async def download_binary(request: Request, region: str, model: str,  firmware: 
             # Another request for streaming the firmware.
             download_file = await client.send(
                 KiesRequest.start_download(
-                    path = KiesUtils.join_path(path, filename), 
+                    path = KiesUtils.join_path(path, filename),
                     session = session,
                     custom_range = request.headers.get("Range", None)
                 ),

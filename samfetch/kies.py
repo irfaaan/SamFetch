@@ -163,8 +163,8 @@ class KiesConstants:
                     "Put": {
                         "BINARY_FILE_NAME": {"Data": filename},
                         "LOGIC_CHECK": {"Data": logic_check},
-                        "DEVICE_IMEI_PUSH": {"Data": imei},
-                        "CLIENT_VERSION": {"Data": KiesConstants.client_version}
+#                         "DEVICE_IMEI_PUSH": {"Data": imei},
+#                         "CLIENT_VERSION": {"Data": KiesConstants.client_version}
                     }
                 }
             }
@@ -206,8 +206,9 @@ class KiesRequest:
         )
 
     @staticmethod
-    def get_download(path: str, session: Session, result: str, client_version: str) -> httpx.Request:
+    def get_download(path: str, session: Session) -> httpx.Request:
         filename = path.split("/")[-1]
+        print("filename hai jani",filename)
         return httpx.Request(
             "POST",
             KiesConstants.BINARY_FILE_URL,
@@ -218,7 +219,7 @@ class KiesRequest:
                 session.encrypted_nonce, session.auth
             ),
             cookies=KiesConstants.COOKIES(session.session_id),
-            params={"result": result, "client_version": client_version}
+#             params={"client_version": client_version}
         )
 
     @staticmethod
