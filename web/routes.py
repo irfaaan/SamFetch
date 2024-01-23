@@ -88,13 +88,10 @@ def read_imei_data(csv_path, target_model):
                 return row[0]  # Return the first element (IMEI) from the matching row
     return None
 
-filepath = None
-p_filename = None
 # Gets the binary details such as filename and decrypt key.
 @bp.get("/<region:str>/<model:str>/<firmware_path:([A-Z0-9]*/[A-Z0-9]*/[A-Z0-9]*/[A-Z0-9]*[/download]*)>")
 async def get_binary_details(request: Request, region: str, model: str, firmware_path: str):
     # Check if "/download" path has been appended to the firmware value.
-    global filepath, p_filename
     is_download = firmware_path.removesuffix("/").endswith("/download")
     firmware = firmware_path.removesuffix("/").removesuffix("/download")
 
@@ -148,9 +145,6 @@ async def get_binary_details(request: Request, region: str, model: str, firmware
 
     if status_code == "200":
         kies = KiesData.from_xml(binary_info.text)
-        filepath = kies.body["MODEL_PATH"]
-        p_filename = kies.body["BINARY_NAME"]
-
         print(f"Attempt {attempt}: Valid IMEI Found: {imei}")
 
         ENCRYPT_VERSION = 4 if str(kies.body["BINARY_NAME"]).endswith("4") else 2
@@ -221,9 +215,8 @@ async def download_binary(request: Request, region: str, model: str,  firmware: 
     nonce = await client.send(KiesRequest.get_nonce())
     session = Session.from_response(nonce)
     # Make the request.
-    path = filepath
-    filename = p_filename
-
+    path = "/neofus/910/"
+    filename = firmware
 
     download_info = await client.send(
         KiesRequest.get_download(path = KiesUtils.join_path(path, filename), session = session)
