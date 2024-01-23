@@ -208,7 +208,6 @@ class KiesRequest:
     @staticmethod
     def get_download(path: str, session: Session) -> httpx.Request:
         filename = path.split("/")[-1]
-        print("filename hai jani",filename)
         return httpx.Request(
             "POST",
             KiesConstants.BINARY_FILE_URL,
