@@ -9,7 +9,8 @@ A simple Web API to download Samsung Stock ROMs from Samsung's own Kies servers,
 
 SamFetch doesn't have any rate-limits to keep it free (as in freedom) as much as I can. However, since this can allow malicious requests (such as spams) I recommend hosting your own instance, as you will have more control over it and you will have own private instance.
 
-SamFetch is currently tested and ready to be hosted on Docker, Heroku ([one-click deploy here](https://heroku.com/deploy?template=https://github.com/irfaaan/SamFetch/tree/imei_generator)) and fly.io. As it is just Python, it should run in any Python environment by default.
+SamFetch is currently tested and ready to be hosted on Docker, Heroku ([one-click deploy here](https://heroku.com/deploy?template=https://github.com/irfaaan/SamFetch/tree/imei_generator)) and fly.io. As it is just Python, it 
+should run in any Python environment by default.
 
 You can also [run in your computer locally](#running) if you don't need to host publicly.
 
