@@ -53,13 +53,15 @@ async def get_firmware_list(request : Request, region : str, model : str):
         raise make_error(SamfetchError.FIRMWARE_LIST_EMPTY, 404)
     raise make_error(SamfetchError.FIRMWARE_CANT_PARSE, 404)
 
-
+request_imei = None
 @bp.get("/<region:str>/<model:str>/<mode:(latest|latest/download)>")
-async def get_firmware_latest(request : Request, region : str, model : str,  mode : str):
+async def get_firmware_latest(request : Request, region : str, model : str,  mode : str, imei: Optional[str] = None):
     """
     Gets the latest firmware version for the device and redirects to its information.
     """
     # Create new session.
+    global request_imei
+    request_imei = request.args.get("imei", None)
     client = httpx.AsyncClient()
     response = await client.send(
         KiesRequest.list_firmware(region = region, model = model)
@@ -90,8 +92,9 @@ def read_imei_data(csv_path, target_model):
 
 # Gets the binary details such as filename and decrypt key.
 @bp.get("/<region:str>/<model:str>/<firmware_path:([A-Z0-9]*/[A-Z0-9]*/[A-Z0-9]*/[A-Z0-9]*[/download]*)>")
-async def get_binary_details(request: Request, region: str, model: str, firmware_path: str):
+async def get_binary_details(request: Request, region: str, model: str, firmware_path: str, imei: Optional[str] = None):
     # Check if "/download" path has been appended to the firmware value.
+    request_imei = request.args.get("imei", None)
     is_download = firmware_path.removesuffix("/").endswith("/download")
     firmware = firmware_path.removesuffix("/").removesuffix("/download")
 
@@ -99,13 +102,20 @@ async def get_binary_details(request: Request, region: str, model: str, firmware
         raise NotFound(f"Requested URL {request.path} not found")
 
     # Placeholder for defining imei before the loop.
-    imei_data = read_imei_data("web/tacs.csv", model)
+    imei_data = None
     imei = None
     status_code = None
+    if request_imei is not None:
+        imei_data = request_imei
+    else:
+        imei_data = read_imei_data("web/tacs.csv", model)
 
     # Use IMEIGenerator to generate a random IMEI
     for attempt in range(1, 6):
-        imei = IMEIGenerator.generate_random_imei(imei_data)
+        if request_imei is None:
+            imei = IMEIGenerator.generate_random_imei(imei_data)
+        else:
+            imei = imei_data
         # imei = "354399110859137"
 
         # Create new session.
