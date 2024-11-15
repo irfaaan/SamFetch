@@ -41,6 +41,9 @@ class SamfetchError(Enum):
     # Range header is invalid.
     RANGE_HEADER_INVALID = "range_header_invalid"
 
+    # UNknown error.
+    UNKNOWN_ERROR = "unknown_error"
+
 
 ERROR_MESSAGES = {
     SamfetchError.DEVICE_NOT_FOUND: \
@@ -67,7 +70,10 @@ ERROR_MESSAGES = {
         "SamFetch couldn't connect to Kies servers. Trying again may fix the issue. " + \
         "If you still get this message, you can create a new Issue, so it can be helpful for fixing the problem.",
     SamfetchError.RANGE_HEADER_INVALID: \
-        "Range header has an invalid range."
+        "Range header has an invalid range.",
+
+    SamfetchError.UNKNOWN_ERROR: \
+        "An unknown error occurred. Please try again or contact support."
 }
 
 def make_error(enum : SamfetchError, status_code : int) -> SanicException:

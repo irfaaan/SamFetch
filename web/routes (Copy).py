@@ -54,14 +54,18 @@ async def get_firmware_list(request : Request, region : str, model : str):
     raise make_error(SamfetchError.FIRMWARE_CANT_PARSE, 404)
 
 request_imei = None
+"""
 @bp.get("/<region:str>/<model:str>/<mode:(latest|latest/download)>")
 async def get_firmware_latest(request : Request, region : str, model : str,  mode : str, imei: Optional[str] = None):
-    """
+     """
+"""
     Gets the latest firmware version for the device and redirects to its information.
-    """
+     """
+"""
     # Create new session.
-    global global_imei
-    global_imei = request.args.get("imei", None)
+    global request_imei
+    request_imei = request.args.get("imei", None)
+    print("Captured IMEI:", request_imei)
     client = httpx.AsyncClient()
     response = await client.send(
         KiesRequest.list_firmware(region = region, model = model)
@@ -79,6 +83,46 @@ async def get_firmware_latest(request : Request, region : str, model : str,  mod
     if firmwares._versions == None:
         raise make_error(SamfetchError.FIRMWARE_LIST_EMPTY, 404)
     raise make_error(SamfetchError.FIRMWARE_CANT_PARSE, 404)
+ """
+@bp.get("/<region:str>/<model:str>/<mode:(latest|latest/download)>")
+async def get_firmware_latest(request: Request, region: str, model: str, mode: str, imei: Optional[str] = None):
+    """Gets the latest firmware version for the device and redirects to its information."""
+
+    # Capture IMEI from the request if available
+    global global_imei
+    request_imei = request.args.get("imei", None)
+#     print("Captured IMEI:", request_imei)
+    global_imei = request_imei
+
+    # Store IMEI in request state so it can be accessed in the next function
+
+    client = httpx.AsyncClient()
+    response = await client.send(
+        KiesRequest.list_firmware(region=region, model=model)
+    )
+    await client.aclose()
+
+    # Raise exception when firmware list couldn't be fetched
+    if response.status_code != 200:
+        raise make_error(SamfetchError.DEVICE_NOT_FOUND, response.status_code)
+
+    # Parse XML and get the latest firmware version
+    firmwares = KiesFirmwareList.from_xml(response.text)
+
+    if firmwares.exists:
+        # Build the redirect URL to go to the second function
+        redirect_url = f"/{region}/{model}/{firmwares.latest}"
+        if "/download" in mode:
+            redirect_url += "/download"
+
+        # Redirect to the binary details page
+        return redirect(redirect_url)
+
+    # Raise exception when device couldn't be found
+    if firmwares._versions is None:
+        raise make_error(SamfetchError.FIRMWARE_LIST_EMPTY, 404)
+
+    raise make_error(SamfetchError.FIRMWARE_CANT_PARSE, 404)
 
 
 # read csv file
@@ -91,12 +135,14 @@ def read_imei_data(csv_path, target_model):
     return None
 
 # Gets the binary details such as filename and decrypt key.
+
+
 @bp.get("/<region:str>/<model:str>/<firmware_path:([A-Z0-9]*/[A-Z0-9]*/[A-Z0-9]*/[A-Z0-9]*[/download]*)>")
-async def get_binary_details(request: Request, region: str, model: str, firmware_path: str, imei: Optional[str] = None):
+async def get_binary_details(request: Request, region: str, model: str, firmware_path: str):
     # Check if "/download" path has been appended to the firmware value.
     global global_imei
     request_imei = global_imei
-    print("IMEI binary:", request_imei)
+#     print("IMEI binary:", request_imei)
     is_download = firmware_path.removesuffix("/").endswith("/download")
     firmware = firmware_path.removesuffix("/").removesuffix("/download")
 
@@ -118,8 +164,7 @@ async def get_binary_details(request: Request, region: str, model: str, firmware
             imei = IMEIGenerator.generate_random_imei(imei_data)
         else:
             imei = imei_data
-            print("imei:", imei)
-        # imei = "354399110859137"
+        # imei = "358482310579782"
 
         # Create new session.
         client = httpx.AsyncClient()
@@ -128,12 +173,14 @@ async def get_binary_details(request: Request, region: str, model: str, firmware
 
         try:
             # Make the request with the generated IMEI
+#             print("imei:", imei)
             binary_info = await client.send(
                 KiesRequest.get_binary(region=region, model=model, firmware=firmware, imei=imei, session=session)
             )
 
             # Read the request.
             root = ET.fromstring(binary_info.text)
+#             print("Response:", binary_info.text)
             status_code = root.find(".//Status").text
             print("code status:", status_code)
 

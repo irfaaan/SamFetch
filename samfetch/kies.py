@@ -133,7 +133,8 @@ class KiesConstants:
         }
 
     client_version = "4.3.23123_1"
-    #imei = "35439911"
+    #imei = "358482310579782"
+
 
     BINARY_INFO = lambda firmware_version, region, model, imei, logic_check: \
         dicttoxml.dicttoxml({
@@ -147,7 +148,10 @@ class KiesConstants:
                         "DEVICE_FW_VERSION": {"Data": firmware_version},
                         "DEVICE_LOCAL_CODE": {"Data": region},
                         "DEVICE_MODEL_NAME": {"Data": model},
+                        "UPGRADE_VARIABLE":  {"Data": "0"},
+                        "OBEX_SUPPORT":  {"Data": "0"},
                         "DEVICE_IMEI_PUSH": {"Data": imei},
+                        "DEVICE_PLATFORM": {"Data": "Android"},
                         "CLIENT_VERSION": {"Data": KiesConstants.client_version},
                         "LOGIC_CHECK": {"Data": logic_check}
                     }
